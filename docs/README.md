@@ -11,7 +11,7 @@ during review or the oral defense instead of implicit.
 | (b) Especificación del servicio (primitivas) | `service-spec.md` → "Service primitives" |
 | (c) Formato de mensajes (encabezado) | `protocol.md` |
 | (d) Reglas de procedimiento (flujo, máquinas de estado) | `service-spec.md` → everything after "Service primitives" |
-| (e) Ejemplos de implementación (diagramas de secuencia) | not yet written — planned once the first end-to-end flow (REGISTER → TELEMETRY → EVENT → AUTH → QUERY) is finalized |
+| (e) Ejemplos de implementación (diagramas de secuencia) | `sequence-diagrams.md` |
 
 `transport-analysis.md` and `assignment-brief.md` support the above but
 aren't part of the RFC structure itself: the first is the graded "análisis
@@ -24,3 +24,4 @@ second is the requirements/rubric these documents are built against.
 2. `protocol.md` — the exact bytes on the wire.
 3. `service-spec.md` — what the server does with those bytes, and when.
 4. `transport-analysis.md` — why each message rides TCP or UDP.
+5. `sequence-diagrams.md` — the above, illustrated end-to-end.
