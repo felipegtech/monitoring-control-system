@@ -4,6 +4,29 @@ Companion to `protocol.md`. That document defines *what bytes* each message
 carries; this one defines *when* they're sent, *what the server does* with
 them, and *how concurrent access to shared server state is kept safe*.
 
+## Service primitives
+
+Before the byte-level format, it's worth stating the service the protocol
+offers independently of its wire encoding — the operations a *user* of the
+protocol (a node, or an admin client) can invoke, the way an RFC describes
+primitives like `SEND`/`RECEIVE` before getting into packet formats.
+
+| Primitive | Invoked by | Effect | Reply |
+|---|---|---|---|
+| `REGISTER(node_name, node_type, interval_hint)` | Node | Registers the node in the server's registry, obtaining a numeric identity | `RESP(assigned_node_id)` or `ERROR` |
+| `EVENT(event_code, severity, message)` | Node | Reports a critical, one-off occurrence tied to an already-registered node | `RESP` (acknowledgment) or `ERROR` |
+| `TELEMETRY(metric_type, value)` | Node | Reports one periodic reading | none — deliberately fire-and-forget (see `transport-analysis.md`) |
+| `AUTH(username, password)` | Admin client | Authenticates the client against real OS user accounts via PAM | `RESP(session_id)` or `ERROR(AUTH_FAILED)` |
+| `QUERY(query_type, target_node_id, count)` | Admin client | Requests one of STATUS / HISTORY / LIST_NODES | `RESP(...)` or `ERROR` |
+
+Every primitive except `TELEMETRY` is **confirmed**: the caller always gets
+back exactly one `RESP` or `ERROR`, never silence. That's a property of the
+*service* itself, not an accident of implementation — it's the reason
+REGISTER/EVENT/AUTH/QUERY all sit on TCP: a primitive that promises a reply
+needs a transport with a natural place to wait for one. `TELEMETRY` is the
+only primitive that intentionally makes no such promise, which is exactly
+why it's the only one on UDP.
+
 ## Node lifecycle
 
 Two different state machines are in play here, from two different vantage

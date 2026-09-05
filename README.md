@@ -29,8 +29,10 @@ server/                    — central server source (C) — added in Fase 2
 
 ## Design documents
 
-Start with `docs/overview.md` for the big picture, then `docs/protocol.md`
-for the exact bytes on the wire, then `docs/service-spec.md` for what the
+See `docs/README.md` for the reading order and how each document maps to
+the RFC-793-style structure the assignment recommends. Short version: start
+with `docs/overview.md` for the big picture, then `docs/protocol.md` for
+the exact bytes on the wire, then `docs/service-spec.md` for what the
 server does with them. `docs/transport-analysis.md` justifies which
 messages ride TCP vs UDP. `docs/assignment-brief.md` is the source of truth
 for requirements this design is built against.
@@ -60,3 +62,33 @@ upload. Once implementation starts (Fase 2), feature work happens on
 short-lived `feature/<short-description>` branches merged back into `main`
 once it builds and does what it claims — this keeps `main` bisectable if
 something breaks later in Fase 3.
+
+## Commits
+
+The assignment is explicitly graded on the commit history showing
+**progressive evolution** — "no se considerará suficiente la existencia de
+una única carga final." One giant commit per phase reads as if the work
+happened in one sitting; several small, meaningful commits read as what
+actually happened. So: commit as you go, not just when a whole feature is
+finished.
+
+Format ([Conventional Commits](https://www.conventionalcommits.org/)):
+
+```
+<type>: <what changed, present tense, why if it's not obvious>
+```
+
+Types used in this repo: `feat` (new capability — e.g. a new message type
+handled), `fix`, `docs`, `refactor`, `test`, `chore` (build/config/tooling).
+Examples that fit this project:
+
+```
+feat(server): parse fixed 8-byte header before reading payload
+feat(node): send REGISTER over TCP on startup
+fix(server): correct off-by-one in payload_length bounds check
+docs: add sequence diagram for the REGISTER/AUTH/QUERY flow
+```
+
+Keep the subject line under ~70 characters; add a short body below it if
+the *why* isn't obvious from the *what*. Commit whatever compiles and does
+something real — don't wait for a whole phase to be "done" to commit once.
