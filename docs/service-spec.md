@@ -53,16 +53,18 @@ STALE --TELEMETRY resumes--> ACTIVE
 REGISTERED, ACTIVE, or STALE --TCP connection drops--> DISCONNECTED
 ```
 
-**Note on `DISCONNECTED`:** the transport decisions in your Fase 1 brief
-describe the server's tracked chain as `UNKNOWN → REGISTERED → ACTIVE →
-STALE`, without an explicit `DISCONNECTED`. Adding it here is a deliberate,
-called-out extension, not a silent change — without it, a node whose TCP
-connection drops would stay reported as `REGISTERED`/`ACTIVE`/`STALE`
-forever, which is clearly wrong and worth fixing now rather than
-discovering it live in the oral defense. `UNKNOWN` itself needs no state
-code at all: a node id the server has never seen simply has no registry
-row, and that's exactly what the existing `UNKNOWN_NODE` error code already
-covers — no need for a redundant state value.
+**Note on `DISCONNECTED`:** the first sketch of this design described the
+server's tracked chain as `UNKNOWN → REGISTERED → ACTIVE → STALE`, with no
+explicit `DISCONNECTED`. Adding it is a deliberate, called-out extension:
+without it, a node whose TCP connection drops would stay reported as
+`REGISTERED`/`ACTIVE`/`STALE` forever. `UNKNOWN` itself needs no state code
+at all — a node id the server has never seen simply has no registry row,
+which is exactly what the `UNKNOWN_NODE` error code already covers.
+
+The normative version of both machines, with an explicit event/condition/
+action table per transition, is `maquinas-de-estado.md` § 1 and § 2. The
+sketches above are the summary; that document is what an implementer
+follows.
 
 Sequence of events:
 
@@ -103,10 +105,9 @@ itself.
 Mechanism: each node record stores `last_telemetry_at` (server's own receive
 timestamp, not the node's) and `telemetry_interval_hint` (from REGISTER).
 A node is considered STALE once `now - last_telemetry_at > 3 *
-telemetry_interval_hint` (3x is a reasonable starting multiplier — tune it
-once you have real timing data; document whatever you land on and be ready
-to justify the choice, since "why 3x and not 2x or 5x" is a fair defense
-question).
+telemetry_interval_hint`. Why the multiplier is 3 and not 2 or 5, and what
+the server substitutes when `interval_hint` arrives as `0`, are specified
+in `maquinas-de-estado.md` § "Sobre el multiplicador 3×".
 
 This check can be implemented either as a periodic sweep (a background
 thread that walks the registry every few seconds) or lazily (computed
@@ -119,7 +120,8 @@ it is a correctness gap a lazy-only approach leaves open.
 
 ```
 CONNECTED --AUTH--> (server calls PAM) --RESP(session_id)--> AUTHENTICATED
-CONNECTED --AUTH (bad creds)--> ERROR(AUTH_FAILED), connection may be dropped
+CONNECTED --AUTH (bad creds)--> ERROR(AUTH_FAILED), still CONNECTED
+CONNECTED --3rd bad AUTH--> ERROR(AUTH_FAILED), connection closed
 AUTHENTICATED --QUERY x N--> AUTHENTICATED
 AUTHENTICATED --TCP connection drops--> session invalidated
 ```
@@ -139,6 +141,10 @@ AUTHENTICATED --TCP connection drops--> session invalidated
    `SESSION_EXPIRED`.
 5. On disconnect, the server discards the session — a new connection always
    needs a fresh AUTH.
+6. A failed AUTH leaves the connection open so the client can retry a
+   mistyped password, but the server counts failures per connection and
+   closes the descriptor after the third, logging the fact. The counter is
+   per connection, not per username — no state survives a disconnect.
 
 ## Concurrency model
 
@@ -197,11 +203,13 @@ safe to block on `recv()` for the answer.
 - **≥5 historical points**: satisfied by QUERY/HISTORY's `count` field —
   default should be 5, and the ring buffer's fixed size must be ≥5 per
   node so a HISTORY query can actually be answered in full.
-- **No hardcoded IPs**: this document doesn't hardcode any IP, but it's
-  worth stating here for the defense — hostnames given on the command line
-  or in config must be resolved via `getaddrinfo()`, and resolution
-  failure (bad hostname, no DNS) must produce a clean error/log line, not a
-  crash.
+- **No hardcoded IPs**: hostnames given on the command line are resolved
+  via `getaddrinfo()`, and resolution failure (bad hostname, no DNS)
+  produces a logged error and a backoff retry, never a crash and never
+  process termination. Specified in `despliegue-y-nombres.md`.
+- **Logging with the client's ip:port**: the exact line format, the source
+  of the address field for TCP and UDP, and the thread-safety rules are
+  specified in `logging.md`.
 - **No DIY user auth**: satisfied by AUTH delegating to PAM against real
   system accounts (see Client lifecycle above). Note this requires the
   server process to have whatever PAM/shadow-read privileges the grading
