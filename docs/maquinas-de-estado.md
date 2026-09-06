@@ -231,7 +231,7 @@ stateDiagram-v2
 1. **El encabezado son 10 bytes**: `version` (1) + `msg_type` (1) +
    `entity_id` (4) + `payload_length` (4). La lectura del encabezado debe
    repetir `recv()` en bucle hasta acumular exactamente 10 bytes. El
-   desglose de campos está en `protocol.md` § Fixed header.
+   desglose de campos está en `protocol.md` § Encabezado fijo.
 2. **`payload_length` se valida antes de reservar memoria.** El máximo es
    `MAX_PAYLOAD = 4096` bytes (`protocol.md` § Límites de tamaño). Un valor
    mayor produce `ERROR(MALFORMED_MSG)` y cierre de la conexión, sin

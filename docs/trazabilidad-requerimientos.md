@@ -64,11 +64,11 @@ duplicar la lógica de despacho sin ganar nada.
 | 2 | Sin comunicación directa nodo ↔ cliente | Ninguna primitiva del protocolo conecta esas dos entidades; el registro del servidor es el único punto de encuentro | `overview.md`, `service-spec.md` | Diseñado |
 | 4 | Sin IPs codificadas; resolver nombres; manejar la excepción sin terminar | Nodos y clientes reciben un nombre de host y lo resuelven con `getaddrinfo()`; el fallo produce reintento con *backoff*, no terminación | `despliegue-y-nombres.md` | Diseñado — Fase 2 |
 | 5 | Interfaz de cliente con estado instantáneo y ≥5 datos históricos | `QUERY/STATUS` y `QUERY/HISTORY` con `count` predeterminado en 5; el búfer circular por nodo tiene capacidad ≥5 | `protocol.md` § QUERY | Diseñado — Fase 2 |
-| 6 | Autenticación y perfiles, sin sistema de usuarios propio en archivos locales | `AUTH` delega en PAM contra cuentas reales del sistema operativo | `service-spec.md` § Client lifecycle | Diseñado — Fase 3 |
+| 6 | Autenticación y perfiles, sin sistema de usuarios propio en archivos locales | `AUTH` delega en PAM contra cuentas reales del sistema operativo | `service-spec.md` § Ciclo de vida del cliente | Diseñado — Fase 3 |
 | 8 | Especificación suficiente para que un tercero la implemente | Estructura estilo RFC 793 repartida en los documentos de `docs/`, indexada en `docs/README.md` | `docs/README.md` | Diseñado |
-| 9 | Integración con TCP/IP vía API de sockets Berkeley | `SOCK_STREAM` y `SOCK_DGRAM` sobre el mismo número de puerto, sin bibliotecas de terceros | `overview.md` § One port, two sockets | Diseñado — Fase 2 |
-| 10 | Soporte de múltiples clientes simultáneos (se permiten hilos) | Modelo hilo por conexión | `service-spec.md` § Concurrency model | Diseñado — Fase 3 |
-| 11 | Control de excepciones | Matriz de errores con un código por situación, más las máquinas de estado que definen el comportamiento ante cada fallo | `service-spec.md` § Error-handling matrix, `maquinas-de-estado.md` | Diseñado — Fase 3 |
+| 9 | Integración con TCP/IP vía API de sockets Berkeley | `SOCK_STREAM` y `SOCK_DGRAM` sobre el mismo número de puerto, sin bibliotecas de terceros | `overview.md` § Arquitectura propuesta | Diseñado — Fase 2 |
+| 10 | Soporte de múltiples clientes simultáneos (se permiten hilos) | Modelo hilo por conexión | `service-spec.md` § Modelo de concurrencia | Diseñado — Fase 3 |
+| 11 | Control de excepciones | Matriz de errores con un código por situación, más las máquinas de estado que definen el comportamiento ante cada fallo | `service-spec.md` § Matriz de manejo de errores, `maquinas-de-estado.md` | Diseñado — Fase 3 |
 
 ---
 
@@ -90,10 +90,10 @@ duplicar la lógica de despacho sin ganar nada.
 
 | Entregable exigido | Documento | Estado |
 |---|---|---|
-| Descripción general del problema | `overview.md` § Problem description | Completo |
-| Arquitectura propuesta | `overview.md` § Proposed architecture | Completo |
-| Entidades participantes | `overview.md` § Participating entities | Completo |
-| Tipos de mensajes | `protocol.md` § `msg_type` enum | Completo |
+| Descripción general del problema | `overview.md` § Descripción del problema | Completo |
+| Arquitectura propuesta | `overview.md` § Arquitectura propuesta | Completo |
+| Entidades participantes | `overview.md` § Entidades participantes | Completo |
+| Tipos de mensajes | `protocol.md` § Enumeración `msg_type` | Completo |
 | Sintaxis preliminar | `protocol.md` § Payloads | Completo |
 | Reglas básicas de comunicación | `service-spec.md` | Completo |
 | Máquinas de estado | `maquinas-de-estado.md` | Completo |

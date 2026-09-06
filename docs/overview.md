@@ -1,36 +1,40 @@
-# System Overview
+# Visión General del Sistema
 
-## Problem description
+## Descripción del problema
 
-An organization operates a distributed infrastructure made of heterogeneous
-nodes — sensors, network equipment, IoT devices — that must be supervised
-remotely. Each node needs to report two qualitatively different things to a
-central point:
+Una organización opera una infraestructura distribuida compuesta por nodos
+heterogéneos —sensores, equipos de red, dispositivos IoT— que deben ser
+supervisados de manera remota. Cada nodo necesita reportar a un punto
+central dos cosas cualitativamente distintas:
 
-- **Periodic status** (telemetry: CPU usage, temperature, battery, uptime,
-  operational metrics) — frequent, and an occasional lost reading doesn't
-  matter because the next one supersedes it.
-- **Critical events** (failures, threshold breaches, connectivity loss,
-  alarms, major state changes) — rare, and losing one can have real
-  consequences, so it can't be dropped silently the way a telemetry reading
-  can.
+- **Estado periódico** (telemetría: utilización de CPU, temperatura,
+  batería, disponibilidad, métricas de funcionamiento). Es frecuente, y la
+  pérdida ocasional de una lectura no importa porque la siguiente la
+  reemplaza.
+- **Eventos críticos** (fallas, superación de umbrales, pérdida de
+  conectividad, alarmas, cambios importantes de estado). Son raros, y
+  perder uno puede tener consecuencias reales, así que no puede
+  descartarse en silencio como sí puede hacerse con una lectura de
+  telemetría.
 
-A central server receives both kinds of information from many nodes at
-once, keeps an up-to-date picture of the whole infrastructure, and answers
-queries from one or more administration clients about that picture — both
-the instantaneous state of a node and its recent history (at least 5 past
-readings). Nodes and admin clients never talk to each other directly;
-everything is mediated by the server, which must also authenticate clients
-against real user accounts rather than a homegrown login system, and must
-never hardcode an IP address (all endpoints are reached by resolving a
-hostname).
+Un servidor central recibe ambos tipos de información desde muchos nodos a
+la vez, mantiene una imagen actualizada de toda la infraestructura, y
+responde consultas de uno o más clientes de administración sobre esa
+imagen: tanto el estado instantáneo de un nodo como su historial reciente
+(al menos 5 lecturas pasadas). Los nodos y los clientes administradores
+nunca se comunican directamente entre sí; todo está mediado por el
+servidor, que además debe autenticar a los clientes contra cuentas de
+usuario reales en lugar de un sistema de login propio, y nunca debe
+codificar una dirección IP: todos los extremos se alcanzan resolviendo un
+nombre de host.
 
-## Proposed architecture
+## Arquitectura propuesta
 
-Three kinds of entities, one central mediator, no direct node↔client link:
+Tres tipos de entidades, un mediador central, y ningún enlace directo
+nodo ↔ cliente:
 
 ```
- [Node 1]  [Node 2]  ...  [Node N]         [Admin Client 1] ... [Admin Client M]
+ [Nodo 1]  [Nodo 2]  ...  [Nodo N]         [Cliente admin 1] ... [Cliente admin M]
      \        |             /                      |
       \       |            /                       |
        \      |           /                        |
@@ -40,49 +44,55 @@ Three kinds of entities, one central mediator, no direct node↔client link:
            \        \          /                 /
             v         v       v                 v
            +-------------------------------------+
-           |          Central Server              |
-           |  - one TCP listening socket           |
-           |  - one UDP bound socket                |
-           |  - shared node registry (mutex-guarded)|
+           |          Servidor Central            |
+           |  - un socket TCP en escucha           |
+           |  - un socket UDP enlazado              |
+           |  - registro de nodos compartido        |
+           |    (protegido por mutex)               |
            +-------------------------------------+
 ```
 
-**One port, two sockets.** The server is invoked as `server <puerto>
-<archivoDeLogs>` — a single port number. TCP and UDP have independent port
-namespaces, so this one number is used to open *two* separate sockets: a
-`SOCK_STREAM` socket that's `bind()`+`listen()`+`accept()`-ed for
-REGISTER/EVENT/AUTH/QUERY, and a `SOCK_DGRAM` socket `bind()`-ed to the same
-port number for TELEMETRY. They don't conflict because "port 5000/tcp" and
-"port 5000/udp" are different addresses as far as the kernel's socket
-tables are concerned — this is worth stating explicitly in the defense
-since it's easy to assume one port means one socket.
+**Un puerto, dos sockets.** El servidor se invoca como
+`server <puerto> <archivoDeLogs>`, con un solo número de puerto. TCP y UDP
+tienen espacios de puertos independientes, así que ese único número se usa
+para abrir *dos* sockets separados: uno `SOCK_STREAM` sobre el que se hace
+`bind()` + `listen()` + `accept()` para REGISTER/EVENT/AUTH/QUERY, y uno
+`SOCK_DGRAM` enlazado al mismo número de puerto para TELEMETRY. No entran
+en conflicto porque "puerto 5000/tcp" y "puerto 5000/udp" son direcciones
+distintas para las tablas de sockets del núcleo. Conviene poder afirmarlo
+explícitamente, porque es fácil suponer que un puerto implica un solo
+socket.
 
-**No hardcoded IPs.** Every participant (node, admin client) is configured
-with a **hostname**, not an IP, for the server it connects to. Each
-resolves it via `getaddrinfo()` immediately before connecting. If
-resolution fails (typo, no DNS, network down), the participant logs the
-failure and either retries after a backoff or exits with a clear error —
-it must not crash (segfault, unhandled exception) as a result of a naming
-failure. The server itself doesn't need to resolve anything outbound; it
-only needs `getaddrinfo()`/`inet_ntop()` on the *receiving* side to log a
-connecting client's address in a readable form.
+**Sin IPs codificadas.** Cada participante —nodo o cliente administrador—
+se configura con un **nombre de host**, no con una IP, para el servidor al
+que se conecta. Cada uno lo resuelve con `getaddrinfo()` inmediatamente
+antes de conectarse. Si la resolución falla (nombre mal escrito, sin DNS,
+red caída), el participante registra el fallo y reintenta con *backoff*; no
+termina su ejecución ni se cae. El servidor no necesita resolver nada hacia
+afuera: solo usa `inet_ntop()` del lado receptor para escribir de forma
+legible la dirección de quien se conecta. El detalle completo está en
+`despliegue-y-nombres.md`.
 
-## Participating entities
+## Entidades participantes
 
-- **Node** — simulates a sensor/IoT device. Registers once (TCP), then
-  concurrently: sends periodic TELEMETRY (UDP) and, when something
-  noteworthy happens, sends an EVENT (TCP, same connection as REGISTER).
-  Can be implemented in any language.
-- **Central Server** — the component this repo/role owns. Pure C, Berkeley
-  sockets only. Accepts many concurrent node and client TCP connections
-  (thread-per-connection) plus a single UDP socket for all telemetry.
-  Maintains the node registry (identity, state, recent readings) behind a
-  mutex, authenticates admin clients via PAM against real system accounts,
-  and logs every request/response (with the client's ip:port) to both
-  console and the log file given on the command line.
-- **Admin Client** — authenticates (AUTH), then issues QUERY messages to
-  read a node's live status or its history (≥5 points) or to list known
-  nodes. Can have a simple UI, in any language.
-- **PAM / system accounts** — not a node or client in the protocol sense,
-  but an explicit external dependency: the authentication authority the
-  server delegates to, satisfying the "no DIY user system" requirement.
+- **Nodo** — simula un sensor o dispositivo IoT. Se registra una vez por
+  TCP y luego, de forma concurrente, envía TELEMETRY periódica por UDP y,
+  cuando ocurre algo relevante, un EVENT por TCP sobre la misma conexión
+  del REGISTER. Puede implementarse en cualquier lenguaje.
+- **Servidor Central** — el componente que este repositorio implementa. C
+  puro, únicamente sockets Berkeley. Acepta muchas conexiones TCP
+  concurrentes de nodos y clientes (un hilo por conexión) más un único
+  socket UDP para toda la telemetría. Mantiene el registro de nodos
+  (identidad, estado, lecturas recientes) detrás de un mutex, autentica a
+  los clientes administradores contra cuentas reales del sistema mediante
+  PAM, y registra cada petición y cada respuesta —con la ip:puerto del
+  cliente— tanto en consola como en el archivo de log indicado por línea
+  de comandos.
+- **Cliente Administrador** — se autentica con AUTH y luego emite mensajes
+  QUERY para leer el estado instantáneo de un nodo, su historial (≥5
+  puntos) o la lista de nodos conocidos. Puede tener una interfaz sencilla,
+  en cualquier lenguaje.
+- **PAM / cuentas del sistema** — no es un nodo ni un cliente en el sentido
+  del protocolo, pero sí una dependencia externa explícita: es la autoridad
+  de autenticación en la que el servidor delega, lo que satisface el
+  requerimiento de no construir un sistema de usuarios propio.

@@ -1,12 +1,13 @@
-# Assignment Brief (verbatim)
+# Enunciado del Proyecto (copia literal)
 
-Course: Internet: Arquitectura y Protocolos, Telemática — EAFIT, 2026-2
-Project: Sistema de monitoreo y control distribuido
+Curso: Internet: Arquitectura y Protocolos, Telemática — EAFIT, 2026-2
+Proyecto: Sistema de monitoreo y control distribuido
 
-Kept here verbatim as the authoritative source for requirements and the
-grading rubric, so design decisions can be traced back to a specific
-requirement number during the oral defense instead of relying on memory of
-a conversation.
+Se conserva aquí de forma literal como fuente autoritativa de los
+requerimientos y de la rúbrica de calificación, para que cada decisión de
+diseño pueda rastrearse hasta un número de requerimiento concreto durante
+la sustentación. El mapa completo de esa trazabilidad está en
+`trazabilidad-requerimientos.md`.
 
 ## Requerimientos
 
