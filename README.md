@@ -1,13 +1,19 @@
 # Sistema de Monitoreo y Control Distribuido
 
-Distributed monitoring and control system built for *Internet: Arquitectura
-y Protocolos* (Telemática), EAFIT, 2026-2. A central server (pure C,
-Berkeley sockets) receives telemetry and critical events from multiple
-simulated sensor/IoT nodes, and answers status/history queries from one or
-more authenticated admin clients. Nodes and clients never talk to each
-other directly — everything is mediated by the server.
+Sistema de monitoreo y control distribuido construido para *Internet:
+Arquitectura y Protocolos* (Telemática), EAFIT, 2026-2. Un servidor central
+—C puro, sockets Berkeley— recibe telemetría y eventos críticos de varios
+nodos sensores/IoT simulados, y responde consultas de estado e historial de
+uno o más clientes administradores autenticados. Los nodos y los clientes
+nunca se comunican entre sí directamente: todo está mediado por el
+servidor.
 
-## Status
+## Integrantes
+
+- David Cuadros
+- Felipe Gómez
+
+## Estado
 
 | Fase | Entrega | Estado |
 |---|---|---|
@@ -15,91 +21,101 @@ other directly — everything is mediated by the server.
 | 2 — Comunicación básica | 23 sept | ⏳ no iniciada |
 | 3 — Concurrencia, resiliencia y pruebas | 30 sept | ⏳ no iniciada |
 
-## Repository layout
+## Estructura del repositorio
 
 ```
 docs/
-  README.md                     — index: RFC-793 structure, reading order, precedence
-  assignment-brief.md           — verbatim copy of the graded requirements/rubric
-  overview.md                   — problem description, architecture, entities
-  protocol.md                   — wire format: header, msg_type enum, payloads, limits
-  service-spec.md               — service primitives, lifecycles, concurrency, errors
-  maquinas-de-estado.md         — the four state machines, as normative transition tables
-  transport-analysis.md         — TCP vs UDP justification per message type
-  sequence-diagrams.md          — the protocol in motion, end to end
-  logging.md                    — console/file log format, ip:port identification
-  despliegue-y-nombres.md       — getaddrinfo(), resolution failure, deployment scenarios
-  trazabilidad-requerimientos.md — requirement → document map, deferred decisions
-server/                         — central server source (C) — added in Fase 2
+  README.md                      — índice: estructura RFC 793, orden de lectura, precedencia
+  assignment-brief.md            — copia literal de los requerimientos y la rúbrica
+  overview.md                    — descripción del problema, arquitectura, entidades
+  protocol.md                    — formato de mensajes: encabezado, msg_type, payloads, límites
+  service-spec.md                — primitivas del servicio, ciclos de vida, concurrencia, errores
+  maquinas-de-estado.md          — las cuatro máquinas de estado, como tablas normativas
+  transport-analysis.md          — justificación de TCP frente a UDP por tipo de mensaje
+  sequence-diagrams.md           — el protocolo en movimiento, de extremo a extremo
+  logging.md                     — formato del log en consola y archivo, identificación ip:puerto
+  despliegue-y-nombres.md        — getaddrinfo(), fallo de resolución, escenarios de despliegue
+  trazabilidad-requerimientos.md — mapa requerimiento → documento, decisiones diferidas
+server/                          — código del servidor central (C) — se agrega en la Fase 2
 ```
 
-## Design documents
+## Documentos de diseño
 
-See `docs/README.md` for the reading order, how each document maps to the
-RFC-793-style structure the assignment recommends, and which document wins
-when two disagree. Short version: start with `docs/overview.md` for the big
-picture, then `docs/protocol.md` for the exact bytes on the wire, then
-`docs/service-spec.md` and `docs/maquinas-de-estado.md` for what the server
-does with them. `docs/transport-analysis.md` justifies which messages ride
-TCP vs UDP.
+Ver `docs/README.md` para el orden de lectura, cómo cada documento se
+corresponde con la estructura estilo RFC 793 que recomienda el enunciado, y
+cuál manda cuando dos se contradicen. En corto: empezar por
+`docs/overview.md` para el panorama general, luego `docs/protocol.md` para
+los bytes exactos que viajan por la red, y después `docs/service-spec.md`
+junto con `docs/maquinas-de-estado.md` para saber qué hace el servidor con
+ellos. `docs/transport-analysis.md` justifica qué mensajes viajan sobre TCP
+y cuáles sobre UDP.
 
-To check the design against the assignment rather than read it end to end,
-start at `docs/trazabilidad-requerimientos.md` — it maps every numbered
-requirement to the document that resolves it, and lists what is
-deliberately deferred to Fase 2 and Fase 3.
+Para contrastar el diseño contra el enunciado en lugar de leerlo de
+principio a fin, el punto de entrada es
+`docs/trazabilidad-requerimientos.md`: mapea cada requerimiento numerado al
+documento que lo resuelve, y lista lo que se difirió deliberadamente a la
+Fase 2 y a la Fase 3.
 
-## Building & running
+## Compilación y ejecución
 
-Not yet available — the server implementation starts in Fase 2. It will be
-built with `gcc` via a `Makefile` and run as:
+Todavía no disponible: la implementación del servidor empieza en la Fase 2.
+Se compilará con `gcc` mediante un `Makefile` y se ejecutará como:
 
 ```
 ./server <puerto> <archivoDeLogs>
 ```
 
-## Team
+Los nodos y los clientes reciben el nombre de host del servidor por línea
+de comandos, nunca una IP:
 
-- Central server (this component): implemented in C using only the
-  Berkeley Sockets API.
-- Node(s) and admin client(s): implemented by other team members, in
-  whichever language they choose, communicating with the server per
-  `docs/protocol.md`.
+```
+./node   <hostname> <puerto> <nombre-del-nodo> <intervalo-segundos>
+./client <hostname> <puerto>
+```
 
-## Branching
+## Reparto del trabajo
 
-`main` is kept in a working/gradeable state at every phase deadline, since
-the graded evidence is the commit history itself, not a single final
-upload. Once implementation starts (Fase 2), feature work happens on
-short-lived `feature/<short-description>` branches merged back into `main`
-once it builds and does what it claims — this keeps `main` bisectable if
-something breaks later in Fase 3.
+- **Servidor central** — implementado en C usando únicamente la API de
+  sockets Berkeley, según exige el enunciado.
+- **Nodos y clientes administradores** — pueden implementarse en cualquier
+  lenguaje. El contrato entre ellos y el servidor es `docs/protocol.md`; no
+  hay ninguna otra dependencia entre las implementaciones.
+
+## Ramas
+
+`main` se mantiene en estado funcional y evaluable en cada fecha de
+entrega, porque la evidencia calificada es el historial de commits en sí y
+no una única carga final. Una vez iniciada la implementación (Fase 2), el
+trabajo se hace en ramas cortas `feature/<descripcion-breve>` que se
+integran de vuelta a `main` cuando compilan y hacen lo que dicen. Así
+`main` sigue siendo bisecable si algo se rompe más adelante en la Fase 3.
 
 ## Commits
 
-The assignment is explicitly graded on the commit history showing
-**progressive evolution** — "no se considerará suficiente la existencia de
-una única carga final." One giant commit per phase reads as if the work
-happened in one sitting; several small, meaningful commits read as what
-actually happened. So: commit as you go, not just when a whole feature is
-finished.
+El enunciado califica explícitamente que el historial muestre una
+**evolución progresiva**: "no se considerará suficiente la existencia de
+una única carga final". Un commit gigante por fase se lee como si el
+trabajo hubiera ocurrido de una sentada; varios commits pequeños y con
+sentido se leen como lo que realmente pasó. En consecuencia: commitear
+sobre la marcha, no solo al terminar una funcionalidad completa.
 
-Format ([Conventional Commits](https://www.conventionalcommits.org/)):
-
-```
-<type>: <what changed, present tense, why if it's not obvious>
-```
-
-Types used in this repo: `feat` (new capability — e.g. a new message type
-handled), `fix`, `docs`, `refactor`, `test`, `chore` (build/config/tooling).
-Examples that fit this project:
+Formato ([Conventional Commits](https://www.conventionalcommits.org/)):
 
 ```
-feat(server): parse fixed 8-byte header before reading payload
-feat(node): send REGISTER over TCP on startup
-fix(server): correct off-by-one in payload_length bounds check
-docs: add sequence diagram for the REGISTER/AUTH/QUERY flow
+<tipo>: <qué cambió, en presente, y por qué si no es evidente>
 ```
 
-Keep the subject line under ~70 characters; add a short body below it if
-the *why* isn't obvious from the *what*. Commit whatever compiles and does
-something real — don't wait for a whole phase to be "done" to commit once.
+Tipos usados en este repositorio: `feat` (capacidad nueva, p. ej. un tipo
+de mensaje que ya se atiende), `fix`, `docs`, `refactor`, `test`, `chore`
+(construcción, configuración, herramientas). Ejemplos que encajan en este
+proyecto:
+
+```
+feat(server): leer el encabezado de 10 bytes antes del payload
+feat(node): enviar REGISTER por TCP al arrancar
+fix(server): corregir el límite de payload_length por uno
+docs: agregar diagrama de secuencia del flujo REGISTER/AUTH/QUERY
+```
+
+Mantener el asunto por debajo de unos 70 caracteres y agregar un cuerpo
+breve cuando el *porqué* no se deduzca del *qué*.
