@@ -3,7 +3,7 @@
 ## Fixed header
 
 Every message, regardless of transport (TCP or UDP), starts with this fixed
-8-byte header:
+10-byte header:
 
 ```
 [1B version][1B msg_type][4B entity_id][4B payload_length]
@@ -16,13 +16,53 @@ Every message, regardless of transport (TCP or UDP), starts with this fixed
 - `entity_id` — **renamed from `node_id`**. It's not always a node: see
   "entity_id semantics" below.
 - `payload_length` — number of bytes following the header for this message.
-  The server does one `recv()` for these fixed 8 bytes, decodes
+  The server does one `recv()` for these fixed 10 bytes, decodes
   `payload_length`, then does a second `recv()` (looped until it has that
   many bytes) for the payload.
 
 All multi-byte integer fields, in the header and in every payload below, are
 sent in **network byte order** (big-endian) and must be converted with
 `htons`/`htonl` before sending and `ntohs`/`ntohl` after receiving.
+
+Byte offsets, so an implementer never has to count them:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1B | `version` |
+| 1 | 1B | `msg_type` |
+| 2 | 4B | `entity_id` |
+| 6 | 4B | `payload_length` |
+| **10** | — | first byte of the payload |
+
+The header is 10 bytes, not 8 — worth stating explicitly because
+`1 + 1 + 4 + 4` is easy to misadd, and a parser that assumes 8 misaligns
+every field from the first message onward.
+
+## Size limits
+
+| Constant | Value | What it bounds |
+|---|---|---|
+| `HEADER_SIZE` | 10 bytes | Fixed, every message, both transports |
+| `MAX_PAYLOAD` | 4096 bytes | Maximum accepted `payload_length` |
+
+`payload_length` is a 4-byte field, so it can *declare* up to 4 GiB. The
+receiver must reject anything above `MAX_PAYLOAD` **before allocating
+memory**, with `ERROR(MALFORMED_MSG)` and closing the connection — see
+`maquinas-de-estado.md` § 4, rule 2. Without that check, one malicious
+message declaring a 4 GiB payload exhausts the server's memory.
+
+Consequences of `MAX_PAYLOAD` for the individual payloads below:
+
+- **EVENT `message`** — `message_len` is 2B and could declare 65535, but
+  the payload's 12 fixed bytes leave at most **4084** usable bytes. A
+  larger declared length is `MALFORMED_MSG`.
+- **QUERY/HISTORY `count`** — each returned point is 12 bytes, and the RESP
+  carries 3 fixed bytes, so no more than 341 points fit in one reply. The
+  per-node ring buffer is sized well under that (≥5 by requirement), so the
+  server simply caps `count` at the ring buffer's size.
+- **QUERY/LIST_NODES** — with variable-length names, the server stops
+  adding entries once the payload would exceed `MAX_PAYLOAD` and reports
+  the `count` it actually included.
 
 ## `msg_type` enum (revised from Fase 1 draft)
 
