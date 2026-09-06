@@ -19,23 +19,34 @@ other directly — everything is mediated by the server.
 
 ```
 docs/
-  assignment-brief.md    — verbatim copy of the graded requirements/rubric
-  overview.md             — problem description, architecture, entities
-  protocol.md              — wire format: header, msg_type enum, all payloads
-  service-spec.md          — lifecycles, concurrency model, error handling
-  transport-analysis.md    — TCP vs UDP justification per message type
-server/                    — central server source (C) — added in Fase 2
+  README.md                     — index: RFC-793 structure, reading order, precedence
+  assignment-brief.md           — verbatim copy of the graded requirements/rubric
+  overview.md                   — problem description, architecture, entities
+  protocol.md                   — wire format: header, msg_type enum, payloads, limits
+  service-spec.md               — service primitives, lifecycles, concurrency, errors
+  maquinas-de-estado.md         — the four state machines, as normative transition tables
+  transport-analysis.md         — TCP vs UDP justification per message type
+  sequence-diagrams.md          — the protocol in motion, end to end
+  logging.md                    — console/file log format, ip:port identification
+  despliegue-y-nombres.md       — getaddrinfo(), resolution failure, deployment scenarios
+  trazabilidad-requerimientos.md — requirement → document map, deferred decisions
+server/                         — central server source (C) — added in Fase 2
 ```
 
 ## Design documents
 
-See `docs/README.md` for the reading order and how each document maps to
-the RFC-793-style structure the assignment recommends. Short version: start
-with `docs/overview.md` for the big picture, then `docs/protocol.md` for
-the exact bytes on the wire, then `docs/service-spec.md` for what the
-server does with them. `docs/transport-analysis.md` justifies which
-messages ride TCP vs UDP. `docs/assignment-brief.md` is the source of truth
-for requirements this design is built against.
+See `docs/README.md` for the reading order, how each document maps to the
+RFC-793-style structure the assignment recommends, and which document wins
+when two disagree. Short version: start with `docs/overview.md` for the big
+picture, then `docs/protocol.md` for the exact bytes on the wire, then
+`docs/service-spec.md` and `docs/maquinas-de-estado.md` for what the server
+does with them. `docs/transport-analysis.md` justifies which messages ride
+TCP vs UDP.
+
+To check the design against the assignment rather than read it end to end,
+start at `docs/trazabilidad-requerimientos.md` — it maps every numbered
+requirement to the document that resolves it, and lists what is
+deliberately deferred to Fase 2 and Fase 3.
 
 ## Building & running
 
