@@ -5,6 +5,7 @@
 #define MCS_SERVER_H
 
 #include <signal.h>
+#include <stdatomic.h>
 #include <sys/socket.h>
 
 #define MAX_CONNS             128  /* conexiones TCP simultáneas */
@@ -13,7 +14,9 @@
 #define MAX_AUTH_ATTEMPTS     3
 #define SWEEP_INTERVAL        1    /* s entre barridos de STALE */
 
-extern volatile sig_atomic_t g_shutdown;
+/* atomic_int sin candados es seguro dentro de un manejador de señal y
+ * entre hilos (volatile sig_atomic_t solo cubre lo primero). */
+extern atomic_int g_shutdown;
 
 /* Lanza un hilo desacoplado que atiende la conexión aceptada. */
 int  conn_spawn(int fd, const struct sockaddr *peer);

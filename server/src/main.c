@@ -26,13 +26,11 @@
 #include <time.h>
 #include <unistd.h>
 
-volatile sig_atomic_t g_shutdown = 0;
-static volatile sig_atomic_t g_signal = 0;
+atomic_int g_shutdown = 0;
 
 static void on_signal(int sig)
 {
-    g_shutdown = 1;
-    g_signal = sig;
+    atomic_store(&g_shutdown, sig);   /* guarda qué señal llegó */
 }
 
 /*
@@ -156,9 +154,24 @@ int main(int argc, char **argv)
              "pam_service=%s admin_group=%s", argv[1], argv[1], argv[2],
              (int)getpid(), auth_backend(), auth_pam_service(),
              auth_admin_group());
-    if (strcmp(auth_backend(), "stub") == 0)
+    if (strcmp(auth_backend(), "stub") == 0) {
         log_line(LOG_WARN, "SYS", "-", "--", "AUTH_STUB",
                  "reason=\"binario de pruebas: no usa PAM\"");
+    } else {
+        /* Sin /etc/pam.d/<servicio>, PAM usa "other", que suele negarlo
+         * todo: todo AUTH fallaría sin que el motivo sea evidente. */
+        char pam_path[256];
+        snprintf(pam_path, sizeof pam_path, "/etc/pam.d/%s",
+                 auth_pam_service());
+        if (access(pam_path, R_OK) != 0)
+            log_line(LOG_WARN, "SYS", "-", "--", "PAM_CONFIG",
+                     "reason=\"no existe %s; ejecute 'sudo make install-pam' "
+                     "o defina MCS_PAM_SERVICE\"", pam_path);
+        if (geteuid() != 0)
+            log_line(LOG_WARN, "SYS", "-", "--", "PAM_PRIVILEGES",
+                     "reason=\"sin root, pam_unix solo valida la contrasena "
+                     "del usuario que ejecuta el servidor\"");
+    }
 
     /* Los hilos auxiliares nacen con las señales bloqueadas. */
     sigset_t block, old;
@@ -194,9 +207,11 @@ int main(int argc, char **argv)
 
     log_line(LOG_INFO, "SYS", "-", "--", "SHUTDOWN",
              "reason=\"%s\" open_conns=%d",
-             g_signal == SIGTERM ? "SIGTERM" : "SIGINT", conn_open_count());
+             atomic_load(&g_shutdown) == SIGTERM ? "SIGTERM" : "SIGINT",
+             conn_open_count());
+    /* No se cierran los sockets a mano: los hilos de conexión y el hilo UDP
+     * pueden seguir bloqueados en recv(); exit() libera todo de una vez. */
     close(tcp_fd);
-    close(udp_fd);
     log_close();
     return 0;
 }
