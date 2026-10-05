@@ -19,7 +19,7 @@ antes de entrar en el formato de los paquetes.
 | `EVENT(event_code, severity, message)` | Nodo | Reporta un suceso crítico y puntual asociado a un nodo ya registrado | `RESP` (confirmación) o `ERROR` |
 | `TELEMETRY(metric_type, value)` | Nodo | Reporta una lectura periódica | ninguna — deliberadamente sin confirmación (ver `transport-analysis.md`) |
 | `AUTH(username, password)` | Cliente administrador | Autentica al cliente contra cuentas reales del sistema operativo mediante PAM | `RESP(session_id)` o `ERROR(AUTH_FAILED)` |
-| `QUERY(query_type, target_node_id, count)` | Cliente administrador | Solicita STATUS, HISTORY o LIST_NODES | `RESP(...)` o `ERROR` |
+| `QUERY(query_type, target_node_id, count)` | Cliente administrador | Solicita STATUS, HISTORY, LIST_NODES o EVENTS; con perfil ADMIN, también PURGE_NODE | `RESP(...)` o `ERROR` |
 
 Toda primitiva salvo `TELEMETRY` es **confirmada**: quien la invoca recibe
 siempre exactamente un `RESP` o un `ERROR`, nunca silencio. Esa es una
@@ -154,6 +154,38 @@ AUTENTICADO --se cae la conexión TCP--> la sesión se invalida
    registrado en el log. El contador es por conexión, no por usuario: no
    sobrevive ningún estado a una desconexión.
 
+## Perfiles de usuario
+
+El requerimiento 6 pide autenticación *y gestión de perfiles*. El perfil
+tampoco se guarda en un archivo propio: se deriva de la pertenencia del
+usuario a un grupo Unix, consultada con `getgrouplist()` después de que
+PAM aceptó las credenciales.
+
+| Perfil | Quién lo recibe | Qué puede hacer |
+|---|---|---|
+| `ADMIN` (1) | Miembros del grupo `mcs-admin` (configurable con la variable de entorno `MCS_ADMIN_GROUP`) | Todas las consultas y además `PURGE_NODE` |
+| `VIEWER` (0) | Cualquier otro usuario autenticado | `STATUS`, `HISTORY`, `LIST_NODES`, `EVENTS` |
+
+El perfil viaja en `RESP(AUTH)` para que el cliente pueda adaptar su
+interfaz, pero el servidor lo verifica en cada `QUERY`: un cliente que
+ignore su perfil y envíe `PURGE_NODE` recibe `ERROR(PERMISSION_DENIED)`.
+
+Gestionar perfiles es, entonces, administrar grupos del sistema:
+
+```
+sudo groupadd mcs-admin
+sudo usermod -aG mcs-admin <usuario>
+```
+
+**Servicio PAM** (decisión diferida de la Fase 1, resuelta): el servidor
+usa el servicio `monitoreo` (`/etc/pam.d/monitoreo`, instalado con
+`sudo make -C server install-pam`), que delega en la pila estándar del
+sistema (`common-auth` en Debian/Ubuntu, `system-auth` en Arch/Fedora). Se
+puede sustituir con `MCS_PAM_SERVICE`. Para validar contraseñas de
+*cualquier* usuario, `pam_unix` necesita que el servidor corra como root;
+sin root solo puede validar la del propio usuario que lo ejecuta. El
+servidor advierte ambas situaciones en el log al arrancar.
+
 ## Modelo de concurrencia
 
 Tres clases de actividad concurrente tocan los mismos datos del servidor
@@ -184,6 +216,27 @@ libera el candado, y solo después se hace el trabajo lento, como componer
 el payload de una RESP o escribir en el archivo de log. El orden de toma de
 candados frente al mutex del logger está fijado en `logging.md`, regla 6.
 
+**Estrategia elegida y justificación (Fase 3).** Se implementó *un hilo
+por conexión* (`pthread_create` desacoplado tras cada `accept()`), más un
+hilo UDP y un hilo de barrido. Alternativas consideradas:
+
+- *`select()`/`poll()` en un solo hilo*: escala mejor en número de
+  conexiones, pero obliga a convertir la máquina de recepción de § 4 en un
+  autómata reentrante por conexión (encabezados a medias, payloads a
+  medias) y a que ninguna operación bloquee. `pam_authenticate()` sí
+  bloquea —tarda ~2 s ante una contraseña errónea por `pam_faildelay`—, y
+  en un solo hilo congelaría a todos los demás clientes y nodos.
+- *Pool fijo de hilos*: limita los recursos, pero una conexión de nodo
+  ocupa su hilo durante toda su vida, así que el pool tendría que ser tan
+  grande como el número de nodos.
+
+Con un hilo por conexión, la máquina de recepción se escribe de forma
+secuencial y directa (`recv_full()` en bucle), y un AUTH lento solo frena
+a su propia conexión. El costo —una pila por conexión— se acota con
+`MAX_CONNS = 128`: la conexión 129 recibe `ERROR(INTERNAL_ERROR)` "servidor
+lleno" y se cierra. Para la escala del proyecto (decenas de nodos y
+clientes) es la opción más simple que cumple el requerimiento sin bloquear.
+
 **Compromiso de persistencia, explícito y no accidental:** los búferes
 circulares viven solo en memoria. Un reinicio del servidor pierde todo el
 historial de telemetría. Es una simplificación aceptable para el alcance de
@@ -206,6 +259,17 @@ escritura anticipada o una base de datos embebida.
 | AUTH con credenciales incorrectas | `ERROR(AUTH_FAILED)`; al tercer intento fallido se cierra la conexión |
 | QUERY/STATUS o QUERY/HISTORY sobre un `target_node_id` nunca registrado | `ERROR(UNKNOWN_NODE)` |
 | QUERY con un `query_type` no reconocido | `ERROR(UNSUPPORTED_QUERY)` |
+| QUERY cuyo payload no mide 7 bytes | `ERROR(MALFORMED_MSG)`, la sesión sigue |
+| REGISTER con un `node_name` que usa un nodo conectado | `ERROR(NAME_IN_USE)` |
+| REGISTER repetido sobre una conexión ya registrada, o REGISTER/EVENT en una conexión de cliente, o AUTH en una de nodo | `ERROR(MALFORMED_MSG)`, la conexión sigue |
+| EVENT con `severity` fuera de 0..2 | `ERROR(INVALID_PARAM)` |
+| PURGE_NODE con perfil VIEWER | `ERROR(PERMISSION_DENIED)` |
+| PURGE_NODE sobre un nodo que no está `DISCONNECTED` | `ERROR(INVALID_PARAM)` |
+| `msg_type` TELEMETRY, RESP, ERROR o desconocido recibido por TCP | `ERROR(MALFORMED_MSG)`, la conexión sigue (el payload ya se consumió, el flujo sigue sincronizado) |
+| Datagrama UDP de menos de 10 bytes, de otro `msg_type`, de versión distinta, con `payload_length ≠ 13` o con `value` no finito (NaN, ∞) | Se descarta y se registra |
+| Conexión que se cierra a mitad de un mensaje | Se descarta lo leído, se registra, el nodo pasa a `DISCONNECTED` si lo era |
+| Conexión que no envía nada en 30 s | Se cierra (temporizador del primer mensaje) |
+| Más de `MAX_CONNS` conexiones simultáneas | `ERROR(INTERNAL_ERROR)` "servidor lleno" y cierre |
 | Cualquier otro fallo del lado del servidor (p. ej. `malloc` fallido, `errno` inesperado) | `ERROR(INTERNAL_ERROR)`. Debe quedar registrado con todo el detalle del lado del servidor, aunque el cliente solo vea un mensaje genérico |
 
 Toda petición de un cliente o de un nodo recibe exactamente un `RESP` o

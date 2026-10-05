@@ -116,6 +116,9 @@ stateDiagram-v2
 | `STALE` | Llega `TELEMETRY` | `entity_id` corresponde a esta entrada | Actualiza `last_telemetry_at`, inserta en el búfer, escribe la transición en el log | `ACTIVE` |
 | `REGISTERED`, `ACTIVE`, `STALE` | `recv()` sobre la conexión TCP retorna 0 o error | — | Marca `DISCONNECTED`, deja de aceptar `TELEMETRY` con ese `node_id` | `DISCONNECTED` |
 | `DISCONNECTED` | Llega `REGISTER` con el mismo `node_name` | — | Asigna un `node_id` **nuevo**, reinicia la entrada | `REGISTERED` |
+| *(cualquier estado salvo `DISCONNECTED`)* | Llega `REGISTER` con el mismo `node_name` | El nombre lo usa un nodo conectado | Responde `ERROR(NAME_IN_USE)`, no modifica la entrada | *(sin cambio)* |
+| `DISCONNECTED` | Barrido periódico | `ahora - disconnected_at > 600 s` | Elimina la entrada, escribe `NODE_PURGED` en el log | *(sin entrada)* |
+| `DISCONNECTED` | `QUERY/PURGE_NODE` de una sesión `ADMIN` | — | Elimina la entrada, responde `RESP` | *(sin entrada)* |
 
 ### Reglas invariantes
 
@@ -182,7 +185,11 @@ stateDiagram-v2
 | `AUTENTICADO` | Llega `QUERY` | `entity_id` coincide con el `session_id` vivo y `query_type` es válido | Responde `RESP` con el cuerpo correspondiente | `AUTENTICADO` |
 | `AUTENTICADO` | Llega `QUERY` | `entity_id` no coincide con el `session_id` | Responde `ERROR(SESSION_EXPIRED)` | `AUTENTICADO` |
 | `AUTENTICADO` | Llega `QUERY` | `query_type` no reconocido | Responde `ERROR(UNSUPPORTED_QUERY)` | `AUTENTICADO` |
-| `AUTENTICADO` | Llega `QUERY/STATUS` o `QUERY/HISTORY` | `target_node_id` sin entrada en el registro | Responde `ERROR(UNKNOWN_NODE)` | `AUTENTICADO` |
+| `AUTENTICADO` | Llega `QUERY/STATUS`, `HISTORY`, `EVENTS` o `PURGE_NODE` | `target_node_id` sin entrada en el registro | Responde `ERROR(UNKNOWN_NODE)` | `AUTENTICADO` |
+| `AUTENTICADO` | Llega `QUERY/PURGE_NODE` | Perfil `VIEWER` | Responde `ERROR(PERMISSION_DENIED)` | `AUTENTICADO` |
+| `AUTENTICADO` | Llega `QUERY/PURGE_NODE` | Perfil `ADMIN`, nodo no `DISCONNECTED` | Responde `ERROR(INVALID_PARAM)` | `AUTENTICADO` |
+| `CONECTADO` | Expira el temporizador del primer mensaje | 30 s sin `AUTH` ni `REGISTER` | Cierra el descriptor | `CERRADO` |
+| `AUTENTICADO` | Expira el temporizador de inactividad | 600 s sin `QUERY` | Cierra el descriptor, invalida la sesión | `CERRADO` |
 | Cualquiera | `recv()` retorna 0 o error | — | Libera el `session_id`, cierra el descriptor, termina el hilo | `CERRADO` |
 
 **Límite de intentos de autenticación.** `CONECTADO → CONECTADO` ante un
@@ -264,6 +271,18 @@ procedimiento es:
    `ACTIVE` o `STALE`, el datagrama se descarta y se registra.
 5. En cualquier otro caso se actualiza el registro. **Nunca se envía
    respuesta**, ni de éxito ni de error.
+
+---
+
+### Temporizadores del servidor
+
+| Temporizador | Valor | Efecto al expirar |
+|---|---|---|
+| Primer mensaje de una conexión (`SO_RCVTIMEO`) | 30 s | Se cierra la conexión: evita que conexiones abiertas sin hablar agoten hilos |
+| Inactividad de un cliente autenticado | 600 s | Se cierra la conexión y se invalida la sesión |
+| Conexión de nodo | sin límite de lectura | Un nodo puede pasar horas sin `EVENT`; la caída silenciosa se detecta con *TCP keepalive* (30 s de inactividad, 3 sondas cada 10 s) |
+| Barrido de `STALE` | cada 1 s | Ver § 2 |
+| Purga de `DISCONNECTED` | 600 s | Ver § 2 |
 
 ---
 

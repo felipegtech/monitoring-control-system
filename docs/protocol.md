@@ -122,7 +122,7 @@ numérico.
 |---|---|---|
 | `node_name_len` | 1B | longitud en bytes del `node_name` que sigue |
 | `node_name` | variable | UTF-8, sin terminador nulo: la longitud va explícita, no se infiere |
-| `node_type` | 1B | enum: `GENERIC=0, TEMPERATURE=1, HUMIDITY=2, MOTION=3, ...` |
+| `node_type` | 1B | enum: `GENERIC=0, TEMPERATURE=1, HUMIDITY=2, MOTION=3, CPU=4, BATTERY=5` |
 | `telemetry_interval_hint` | 2B | segundos; informativo, lo usa el servidor para el cálculo de `STALE` (ver `maquinas-de-estado.md`) |
 
 Por qué una cadena con longitud al frente en lugar de un `char name[32]` de
@@ -140,8 +140,8 @@ identificador asignado al nodo.
 
 | Campo | Tamaño | Notas |
 |---|---|---|
-| `event_code` | 1B | enum: `THRESHOLD_EXCEEDED=1, HARDWARE_FAULT=2, TAMPER=3, ...` |
-| `severity` | 1B | enum: `INFO=0, WARNING=1, CRITICAL=2` |
+| `event_code` | 1B | enum: `THRESHOLD_EXCEEDED=1, HARDWARE_FAULT=2, TAMPER=3, BACK_TO_NORMAL=4, MANUAL=5`; el servidor almacena cualquier valor |
+| `severity` | 1B | enum: `INFO=0, WARNING=1, CRITICAL=2`; otro valor produce `ERROR(INVALID_PARAM)` |
 | `node_timestamp` | 8B | reloj propio del nodo (época Unix, segundos) — solo informativo, ver abajo |
 | `message_len` | 2B | longitud del `message` que sigue |
 | `message` | variable | texto libre legible, p. ej. "temp 95C excede el umbral 80C" |
@@ -162,7 +162,7 @@ intervalo del nodo. `entity_id` es el identificador asignado al nodo.
 
 | Campo | Tamaño | Notas |
 |---|---|---|
-| `metric_type` | 1B | enum correspondiente al canal del nodo, p. ej. `TEMPERATURE=1` |
+| `metric_type` | 1B | enum correspondiente al canal del nodo, con los mismos valores que `node_type` (p. ej. `TEMPERATURE=1`) |
 | `node_timestamp` | 8B | misma salvedad que en EVENT: informativo, no se usa para ordenar |
 | `value` | 4B | float IEEE-754, la lectura en sí |
 
@@ -215,15 +215,28 @@ AUTH tuvo éxito.
 
 | Campo | Tamaño | Notas |
 |---|---|---|
-| `query_type` | 1B | enum: `STATUS=1, HISTORY=2, LIST_NODES=3` |
-| `target_node_id` | 4B | a qué nodo se refiere — significativo para STATUS/HISTORY, ignorado para LIST_NODES |
-| `count` | 2B | solo HISTORY — cuántos puntos recientes; el valor por omisión es 5 y se acota al tamaño del búfer circular por nodo |
+| `query_type` | 1B | enum: `STATUS=1, HISTORY=2, LIST_NODES=3, EVENTS=4, PURGE_NODE=5` |
+| `target_node_id` | 4B | a qué nodo se refiere — significativo para STATUS/HISTORY/EVENTS/PURGE_NODE, ignorado para LIST_NODES |
+| `count` | 2B | HISTORY y EVENTS — cuántos elementos recientes; `0` significa el valor por omisión, 5. Se acota al tamaño del búfer circular (20 lecturas, 10 eventos) |
+
+El payload de QUERY mide siempre exactamente 7 bytes; cualquier otra
+longitud es `ERROR(MALFORMED_MSG)`.
 
 Los tres tipos de consulta cubren los requerimientos del enunciado: el
 estado instantáneo de un nodo (STATUS), el historial de al menos 5 puntos
 (HISTORY), y el descubrimiento de qué nodos existen (LIST_NODES). Sin este
 último, un administrador no puede preguntar por un nodo por identificador
 sin saber antes qué identificadores existen.
+
+Los dos tipos agregados en la Fase 2 completan el diseño:
+
+- **EVENTS** — sin él, los eventos críticos llegarían al servidor pero
+  ningún administrador podría leerlos. Devuelve los últimos eventos del
+  nodo, del más reciente al más antiguo.
+- **PURGE_NODE** — operación de *control* reservada al perfil `ADMIN`:
+  elimina del registro un nodo en estado `DISCONNECTED`. Es lo que da
+  sentido a los perfiles de usuario del requerimiento 6 (ver
+  `service-spec.md` § Perfiles).
 
 ## Payloads — respuestas del servidor (RESP, ERROR)
 
@@ -244,8 +257,9 @@ Formas del cuerpo:
 
 - **respondiendo REGISTER** → `assigned_node_id` (4B)
 - **respondiendo EVENT** → cuerpo vacío; la confirmación es la RESP misma
-- **respondiendo AUTH** → `session_id` (4B). Este valor es *también* lo que
-  el cliente debe poner en `entity_id` de cada QUERY que envíe después
+- **respondiendo AUTH** → `session_id` (4B) + `profile` (1B, enum
+  `VIEWER=0, ADMIN=1`). El `session_id` es *también* lo que el cliente
+  debe poner en `entity_id` de cada QUERY que envíe después
 - **respondiendo QUERY/STATUS** → `node_id` (4B) + `state` (1B, enum
   `REGISTERED=0, ACTIVE=1, STALE=2, DISCONNECTED=3`; ver
   `maquinas-de-estado.md` § 2 para qué significa cada uno y por qué no
@@ -256,6 +270,16 @@ Formas del cuerpo:
   los 5 puntos históricos aparece efectivamente en el cable
 - **respondiendo QUERY/LIST_NODES** → `count` (2B) + `count` repeticiones
   de {`node_id` (4B), `name_len` (1B), `name` (variable), `state` (1B)}
+- **respondiendo QUERY/EVENTS** → `count` (2B) + `count` repeticiones de
+  {`server_ts` (8B), `node_ts` (8B), `event_code` (1B), `severity` (1B),
+  `message_len` (1B), `message` (variable, el servidor conserva hasta 200
+  bytes)}
+- **respondiendo QUERY/PURGE_NODE** → cuerpo vacío
+
+En STATUS, `last_timestamp = 0` indica que aún no ha llegado telemetría (y
+entonces `last_value` no es significativo). Los timestamps de STATUS,
+HISTORY y `server_ts` son la hora de recepción del servidor, en segundos
+de época Unix.
 
 ### ERROR
 
@@ -276,7 +300,16 @@ UNSUPPORTED_QUERY = 4   // query_type no reconocido
 SESSION_EXPIRED   = 5   // el entity_id de un QUERY no corresponde a una sesión viva
 INTERNAL_ERROR    = 6   // fallo del servidor ajeno a la petición en sí
 VERSION_MISMATCH  = 7   // campo version del encabezado no soportado
+NAME_IN_USE       = 8   // REGISTER con un node_name que usa un nodo conectado
+PERMISSION_DENIED = 9   // el perfil de la sesión no permite la operación
+INVALID_PARAM     = 10  // formato correcto, valor fuera de rango o no aplicable
 ```
+
+Los códigos 8 a 10 se agregaron durante la implementación (Fase 2) para no
+reutilizar `MALFORMED_MSG` en situaciones donde el mensaje sí está bien
+formado: un nombre repetido, una operación no permitida para el perfil, o
+un parámetro fuera de rango (una `severity` de 7, purgar un nodo que sigue
+conectado).
 
 `UNKNOWN_NODE` aparece como respuesta al QUERY de un cliente y también al
 EVENT de un nodo cuyo identificador el servidor ya no reconoce —por

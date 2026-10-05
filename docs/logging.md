@@ -81,7 +81,7 @@ Autenticación de un cliente administrador:
 
 ```
 2026-09-08T14:25:02.117-05:00 INFO TCP 10.0.0.8:44120 RX AUTH entity_id=0 len=22 username="dcuadros" password=<redacted>
-2026-09-08T14:25:02.164-05:00 INFO TCP 10.0.0.8:44120 TX RESP entity_id=3001 len=5 in_response_to=AUTH session_id=3001
+2026-09-08T14:25:02.164-05:00 INFO TCP 10.0.0.8:44120 TX RESP entity_id=3001 len=6 in_response_to=AUTH session_id=3001 profile=ADMIN
 ```
 
 Autenticación fallida:
