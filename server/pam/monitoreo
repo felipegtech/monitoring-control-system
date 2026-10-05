@@ -1,0 +1,5 @@
+# Servicio PAM "monitoreo" — Debian/Ubuntu (p. ej. la instancia EC2).
+# Delega en la configuración estándar del sistema: el servidor no mantiene
+# usuarios propios.
+@include common-auth
+@include common-account
