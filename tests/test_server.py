@@ -426,6 +426,11 @@ class ServerTest(unittest.TestCase):
 class CommandLineTest(unittest.TestCase):
     BIN = os.path.join(ROOT, "server", "server-stub")
 
+    @classmethod
+    def setUpClass(cls):
+        subprocess.run(["make", "-s", "-C", os.path.join(ROOT, "server"),
+                        "stub"], check=True)
+
     def test_usage_without_arguments(self):
         r = subprocess.run([self.BIN], capture_output=True)
         self.assertEqual(r.returncode, 2)
