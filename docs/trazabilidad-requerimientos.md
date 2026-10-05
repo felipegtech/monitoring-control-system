@@ -11,6 +11,9 @@ Convención de estado:
 - **Fase 2** / **Fase 3** — la decisión de diseño existe, la implementación
   corresponde a esa fase.
 - **Pendiente** — falta decidirlo.
+- **Implementado** — existe en el código (Fases 2 y 3) y está cubierto por
+  `tests/test_server.py`. Dónde vive cada pieza en el código está en
+  `implementacion.md`.
 
 ---
 
@@ -47,12 +50,12 @@ duplicar la lógica de despacho sin ganar nada.
 
 | # | Obligación | Cómo se resuelve | Estado |
 |---|---|---|---|
-| a | Registrar los nodos que participan | `REGISTER` asigna `node_id` y crea entrada en el registro | Diseñado — Fase 2 |
-| b | Recibir información periódica sobre su estado | `TELEMETRY` por UDP, búfer circular por nodo | Diseñado — Fase 2 |
-| c | Recibir eventos generados por los nodos | `EVENT` por la conexión TCP del `REGISTER` | Diseñado — Fase 2 |
-| d | Mantener información sobre el estado de los nodos | Registro en memoria con estados `REGISTERED`/`ACTIVE`/`STALE`/`DISCONNECTED` | Diseñado — Fase 2 |
-| e | Responder consultas sobre la infraestructura | `QUERY` con tipos `STATUS`, `HISTORY`, `LIST_NODES` | Diseñado — Fase 2 |
-| f | Atender múltiples clientes concurrentemente | Un hilo por conexión TCP + un hilo dedicado al socket UDP, registro protegido por mutex | Diseñado — Fase 3 |
+| a | Registrar los nodos que participan | `REGISTER` asigna `node_id` y crea entrada en el registro | Implementado |
+| b | Recibir información periódica sobre su estado | `TELEMETRY` por UDP, búfer circular por nodo | Implementado |
+| c | Recibir eventos generados por los nodos | `EVENT` por la conexión TCP del `REGISTER` | Implementado |
+| d | Mantener información sobre el estado de los nodos | Registro en memoria con estados `REGISTERED`/`ACTIVE`/`STALE`/`DISCONNECTED` | Implementado |
+| e | Responder consultas sobre la infraestructura | `QUERY` con tipos `STATUS`, `HISTORY`, `LIST_NODES` | Implementado |
+| f | Atender múltiples clientes concurrentemente | Un hilo por conexión TCP + un hilo dedicado al socket UDP, registro protegido por mutex | Implementado |
 
 ---
 
@@ -62,13 +65,13 @@ duplicar la lógica de despacho sin ganar nada.
 |---|---|---|---|---|
 | 1 | Mínimo 2 nodos, 1 servidor, 1+ clientes | Arquitectura de tres entidades sin límite superior de nodos | `overview.md` | Diseñado |
 | 2 | Sin comunicación directa nodo ↔ cliente | Ninguna primitiva del protocolo conecta esas dos entidades; el registro del servidor es el único punto de encuentro | `overview.md`, `service-spec.md` | Diseñado |
-| 4 | Sin IPs codificadas; resolver nombres; manejar la excepción sin terminar | Nodos y clientes reciben un nombre de host y lo resuelven con `getaddrinfo()`; el fallo produce reintento con *backoff*, no terminación | `despliegue-y-nombres.md` | Diseñado — Fase 2 |
-| 5 | Interfaz de cliente con estado instantáneo y ≥5 datos históricos | `QUERY/STATUS` y `QUERY/HISTORY` con `count` predeterminado en 5; el búfer circular por nodo tiene capacidad ≥5 | `protocol.md` § QUERY | Diseñado — Fase 2 |
-| 6 | Autenticación y perfiles, sin sistema de usuarios propio en archivos locales | `AUTH` delega en PAM contra cuentas reales del sistema operativo | `service-spec.md` § Ciclo de vida del cliente | Diseñado — Fase 3 |
+| 4 | Sin IPs codificadas; resolver nombres; manejar la excepción sin terminar | Nodos y clientes reciben un nombre de host y lo resuelven con `getaddrinfo()`; el fallo produce reintento con *backoff*, no terminación | `despliegue-y-nombres.md` | Implementado |
+| 5 | Interfaz de cliente con estado instantáneo y ≥5 datos históricos | `QUERY/STATUS` y `QUERY/HISTORY` con `count` predeterminado en 5; el búfer circular por nodo tiene capacidad ≥5 | `protocol.md` § QUERY | Implementado |
+| 6 | Autenticación y perfiles, sin sistema de usuarios propio en archivos locales | `AUTH` delega en PAM contra cuentas reales del sistema operativo | `service-spec.md` § Ciclo de vida del cliente | Implementado |
 | 8 | Especificación suficiente para que un tercero la implemente | Estructura estilo RFC 793 repartida en los documentos de `docs/`, indexada en `docs/README.md` | `docs/README.md` | Diseñado |
-| 9 | Integración con TCP/IP vía API de sockets Berkeley | `SOCK_STREAM` y `SOCK_DGRAM` sobre el mismo número de puerto, sin bibliotecas de terceros | `overview.md` § Arquitectura propuesta | Diseñado — Fase 2 |
-| 10 | Soporte de múltiples clientes simultáneos (se permiten hilos) | Modelo hilo por conexión | `service-spec.md` § Modelo de concurrencia | Diseñado — Fase 3 |
-| 11 | Control de excepciones | Matriz de errores con un código por situación, más las máquinas de estado que definen el comportamiento ante cada fallo | `service-spec.md` § Matriz de manejo de errores, `maquinas-de-estado.md` | Diseñado — Fase 3 |
+| 9 | Integración con TCP/IP vía API de sockets Berkeley | `SOCK_STREAM` y `SOCK_DGRAM` sobre el mismo número de puerto, sin bibliotecas de terceros | `overview.md` § Arquitectura propuesta | Implementado |
+| 10 | Soporte de múltiples clientes simultáneos (se permiten hilos) | Modelo hilo por conexión | `service-spec.md` § Modelo de concurrencia | Implementado |
+| 11 | Control de excepciones | Matriz de errores con un código por situación, más las máquinas de estado que definen el comportamiento ante cada fallo | `service-spec.md` § Matriz de manejo de errores, `maquinas-de-estado.md` | Implementado |
 
 ---
 
@@ -76,13 +79,13 @@ duplicar la lógica de despacho sin ganar nada.
 
 | Exigencia | Decisión | Documento | Estado |
 |---|---|---|---|
-| Servidor únicamente en C, solo API Berkeley | C11, `sys/socket.h`, `netdb.h`, `pthread.h`; sin bibliotecas de red de terceros | `overview.md` | Fase 2 |
-| Clientes y nodos en cualquier lenguaje | Definido por cada integrante; el contrato es `protocol.md` | `protocol.md` | Fase 2 |
-| Logging en consola y en archivo | Formato de línea único, idéntico en ambos destinos | `logging.md` | Diseñado — Fase 2 |
-| Registro del identificador del cliente (ip y puerto origen) | Campo obligatorio en cada línea de log, obtenido de `accept()` o `recvfrom()` | `logging.md` | Diseñado — Fase 2 |
-| Invocación `./server <puerto> <archivoDeLogs>` | Dos argumentos posicionales obligatorios | `logging.md` § Invocación | Diseñado — Fase 2 |
-| Compilación con `gcc` y `Makefile` | `Makefile` en la raíz de `server/` | — | Fase 2 |
-| Servidor desplegable en nube (AWS Educate, IaaS) | Instancia EC2, puerto configurable, reglas de grupo de seguridad para TCP y UDP | `despliegue-y-nombres.md` | Fase 2 |
+| Servidor únicamente en C, solo API Berkeley | C11, `sys/socket.h`, `netdb.h`, `pthread.h`; sin bibliotecas de red de terceros | `overview.md` | Implementado |
+| Clientes y nodos en cualquier lenguaje | Python 3 sin dependencias externas (`clients/`); el contrato es `protocol.md` | `protocol.md` | Implementado |
+| Logging en consola y en archivo | Formato de línea único, idéntico en ambos destinos | `logging.md` | Implementado |
+| Registro del identificador del cliente (ip y puerto origen) | Campo obligatorio en cada línea de log, obtenido de `accept()` o `recvfrom()` | `logging.md` | Implementado |
+| Invocación `./server <puerto> <archivoDeLogs>` | Dos argumentos posicionales obligatorios | `logging.md` § Invocación | Implementado |
+| Compilación con `gcc` y `Makefile` | `server/Makefile` (`make`, `make stub`, `make test`) | `implementacion.md` | Implementado |
+| Servidor desplegable en nube (AWS Educate, IaaS) | Instancia EC2, puerto configurable, reglas de grupo de seguridad para TCP y UDP | `despliegue-y-nombres.md`, `implementacion.md` | Documentado |
 
 ---
 
@@ -106,18 +109,26 @@ decisiones que la Fase 2 tendría que improvisar.
 
 ---
 
-## 6. Decisiones diferidas
+## 6. Decisiones diferidas — cómo se resolvieron
 
-Las siguientes decisiones están identificadas pero no resueltas. Se listan
-explícitamente para que consten como decisiones diferidas y no como
-omisiones.
+Estas decisiones quedaron abiertas en la Fase 1. Se conserva la lista con
+la resolución adoptada en la implementación.
 
-| Tema | Situación | Fase en que debe resolverse |
+| Tema | Resolución | Dónde |
 |---|---|---|
-| Conversión de enteros de 64 bits | `node_timestamp` ocupa 8 bytes y no existe una función estándar equivalente a `htonl` para ese tamaño. Debe definirse una conversión manual byte a byte | Fase 2 |
-| Serialización de `float` | El valor de `TELEMETRY` es IEEE-754 de 4 bytes. `htonl` no se le puede aplicar directamente; requiere copia a `uint32_t` con `memcpy` antes de convertir | Fase 2 |
-| Serialización sin `memcpy` de structs | El relleno que el compilador inserta entre campos de 1, 2 y 4 bytes rompe el formato en el cable. La serialización debe ser campo por campo | Fase 2 |
-| Credenciales en texto claro | `AUTH` transmite la contraseña sin cifrar. Limitación asumida y documentada; la solución sería TLS, fuera del alcance de un proyecto restringido a sockets Berkeley | Asumida |
-| Historial solo en memoria | Un reinicio del servidor pierde el historial de telemetría. Simplificación asumida frente a añadir persistencia | Asumida |
-| Purga de entradas `DISCONNECTED` | No está definido cuánto tiempo permanece en el registro un nodo desconectado antes de eliminarse | Fase 3 |
-| Servicio PAM a registrar | No está definido el nombre del servicio PAM ni los permisos que el proceso necesita en la máquina de evaluación | Fase 3 |
+| Conversión de enteros de 64 bits | Dos `htonl` sobre las mitades alta y baja (`wr_u64` / `rd_u64`) | `server/src/protocol.c` |
+| Serialización de `float` | `memcpy` a `uint32_t` y luego `htonl`; en Python, `struct` con `"!f"` | `server/src/protocol.c`, `clients/mcsproto.py` |
+| Serialización sin `memcpy` de structs | Lector y escritor acotados (`reader_t` / `writer_t`) que procesan campo por campo y detectan payloads truncados | `server/src/protocol.c` |
+| Credenciales en texto claro | Se mantiene como limitación asumida; el servidor nunca escribe la contraseña en el log y borra su copia en memoria tras usarla | `server/src/conn.c` |
+| Historial solo en memoria | Se mantiene como simplificación asumida | — |
+| Purga de entradas `DISCONNECTED` | Automática a los 600 s por el barrido, o inmediata con `QUERY/PURGE_NODE` (perfil `ADMIN`) | `maquinas-de-estado.md` § 2 |
+| Servicio PAM a registrar | Servicio `monitoreo`, instalado con `sudo make -C server install-pam`; configurable con `MCS_PAM_SERVICE` | `service-spec.md` § Perfiles |
+
+## 7. Extensiones introducidas en la implementación
+
+| Extensión | Motivo |
+|---|---|
+| `profile` (1B) en `RESP(AUTH)` | Gestión de perfiles del requerimiento 6 |
+| `QUERY/EVENTS` (4) | Los eventos críticos se recibían pero ningún cliente podía consultarlos |
+| `QUERY/PURGE_NODE` (5) | Operación de control que distingue a los perfiles; resuelve la purga diferida |
+| Errores `NAME_IN_USE` (8), `PERMISSION_DENIED` (9), `INVALID_PARAM` (10) | No reutilizar `MALFORMED_MSG` para mensajes bien formados |

@@ -22,6 +22,7 @@ Documentos de apoyo, fuera de la estructura RFC propiamente dicha:
 | `despliegue-y-nombres.md` | Requerimiento 4: resolución de nombres, manejo del fallo de resolución, escenarios de despliegue |
 | `logging.md` | Formato exacto del log en consola y archivo, con el identificador ip:puerto exigido |
 | `trazabilidad-requerimientos.md` | Mapa requerimiento → documento, y las decisiones diferidas |
+| `implementacion.md` | Fases 2 y 3: mapa especificación → código, compilación, ejecución, pruebas y guion de sustentación |
 | `assignment-brief.md` | Copia literal de los requerimientos y la rúbrica |
 
 ## Orden de lectura
@@ -36,7 +37,8 @@ Documentos de apoyo, fuera de la estructura RFC propiamente dicha:
    extremo.
 
 `despliegue-y-nombres.md` y `logging.md` se leen al implementar, no al
-aprender el protocolo. `trazabilidad-requerimientos.md` es el punto de
+aprender el protocolo. `implementacion.md` dice dónde está cada regla en el
+código. `trazabilidad-requerimientos.md` es el punto de
 entrada para revisar: dice qué documento responde a cada requerimiento.
 
 ## Precedencia normativa

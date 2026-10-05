@@ -18,8 +18,8 @@ servidor.
 | Fase | Entrega | Estado |
 |---|---|---|
 | 1 — Diseño y arquitectura | 9 sept | ✅ propuesta inicial completa (ver `docs/`) |
-| 2 — Comunicación básica | 23 sept | ⏳ no iniciada |
-| 3 — Concurrencia, resiliencia y pruebas | 30 sept | ⏳ no iniciada |
+| 2 — Comunicación básica | 23 sept | ✅ servidor C, nodo y cliente Python (ver `docs/implementacion.md`) |
+| 3 — Concurrencia, resiliencia y pruebas | 30 sept | ✅ hilo por conexión, manejo de errores, 33 pruebas de integración |
 
 ## Estructura del repositorio
 
@@ -36,7 +36,16 @@ docs/
   logging.md                     — formato del log en consola y archivo, identificación ip:puerto
   despliegue-y-nombres.md        — getaddrinfo(), fallo de resolución, escenarios de despliegue
   trazabilidad-requerimientos.md — mapa requerimiento → documento, decisiones diferidas
-server/                          — código del servidor central (C) — se agrega en la Fase 2
+  implementacion.md              — mapa especificación → código, ejecución, pruebas, sustentación
+server/                          — servidor central: C11, sockets Berkeley, pthreads, PAM
+  Makefile                       — make | make stub | make test | sudo make install-pam
+  src/                           — protocol, logger, registry, auth, conn (TCP), udp, main
+  pam/                           — servicio PAM "monitoreo"
+clients/                         — Python 3, solo biblioteca estándar
+  mcsproto.py                    — codificación del protocolo compartida
+  node.py                        — nodo sensor simulado
+  admin.py                       — cliente administrador (consultas y panel en vivo)
+tests/test_server.py             — pruebas de integración por la red
 ```
 
 ## Documentos de diseño
@@ -58,28 +67,48 @@ Fase 2 y a la Fase 3.
 
 ## Compilación y ejecución
 
-Todavía no disponible: la implementación del servidor empieza en la Fase 2.
-Se compilará con `gcc` mediante un `Makefile` y se ejecutará como:
+```
+make -C server                         # compila ./server/server
+make -C server test                    # compila server-stub y corre las pruebas
+sudo make -C server install-pam        # una vez: servicio PAM "monitoreo"
+```
+
+El servidor recibe exactamente los dos parámetros que pide el enunciado:
 
 ```
-./server <puerto> <archivoDeLogs>
+sudo ./server/server <puerto> <archivoDeLogs>
 ```
 
 Los nodos y los clientes reciben el nombre de host del servidor por línea
 de comandos, nunca una IP:
 
 ```
-./node   <hostname> <puerto> <nombre-del-nodo> <intervalo-segundos>
-./client <hostname> <puerto>
+python3 clients/node.py  <hostname> <puerto> <nombre-del-nodo> <intervalo-segundos> [--type N --base X --threshold X]
+python3 clients/admin.py <hostname> <puerto> [-u usuario]
 ```
+
+Ejemplo completo en una sola máquina (con `127.0.0.1 monitoreo.local` en
+`/etc/hosts`):
+
+```
+sudo ./server/server 5000 servidor.log
+python3 clients/node.py  monitoreo.local 5000 sensor-lab-01 2
+python3 clients/node.py  monitoreo.local 5000 cpu-rack-02 3 --type 4 --base 50 --threshold 75
+python3 clients/admin.py monitoreo.local 5000 -u $USER      # luego: nodos, historial 1, panel
+```
+
+Usuarios, perfiles (`ADMIN` por el grupo `mcs-admin`), despliegue en AWS y
+el guion de la sustentación: `docs/implementacion.md`.
 
 ## Reparto del trabajo
 
 - **Servidor central** — implementado en C usando únicamente la API de
   sockets Berkeley, según exige el enunciado.
-- **Nodos y clientes administradores** — pueden implementarse en cualquier
-  lenguaje. El contrato entre ellos y el servidor es `docs/protocol.md`; no
-  hay ninguna otra dependencia entre las implementaciones.
+- **Nodos y clientes administradores** — implementados en Python 3
+  (`clients/`), sin dependencias externas. El contrato entre ellos y el
+  servidor es `docs/protocol.md`; no hay ninguna otra dependencia entre las
+  implementaciones, así que un cliente en otro lenguaje solo necesita
+  respetar ese documento.
 
 ## Ramas
 
