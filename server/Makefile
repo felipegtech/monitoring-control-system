@@ -2,6 +2,7 @@
 #
 #   make              compila ./server (autenticación PAM)
 #   make stub         compila ./server-stub (autenticación de prueba, solo tests)
+#   make test         compila server-stub y corre tests/test_server.py
 #   make install-pam  instala server/pam/monitoreo en /etc/pam.d (requiere sudo)
 #   make clean
 
@@ -15,7 +16,7 @@ HDR     := $(wildcard src/*.h)
 OBJ     := $(patsubst src/%.c,build/%.o,$(SRC))
 OBJ_STUB:= $(patsubst src/%.c,build/stub/%.o,$(SRC))
 
-.PHONY: all stub clean install-pam
+.PHONY: all stub test clean install-pam
 
 all: server
 
@@ -35,6 +36,9 @@ build/stub/%.o: src/%.c $(HDR) | build/stub
 
 build build/stub:
 	mkdir -p $@
+
+test: server-stub
+	python3 ../tests/test_server.py
 
 # Debian/Ubuntu usan common-auth; Arch/Fedora usan system-auth.
 install-pam:
