@@ -9,9 +9,11 @@ build/
 bin/
 obj/
 
-# The server binary itself (name TBD once the Makefile exists)
-/server
+# Binarios del servidor (el directorio server/ sí se versiona)
+
 /central_server
+server/server
+server/server-stub
 
 # Runtime output — the log file is a command-line argument, not source
 *.log
